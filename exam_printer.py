@@ -22,7 +22,9 @@ Scoring key
 
 PDF layout assumptions
 ----------------------
-* Page 1 (index 0): cover page – the student's name is stamped on it.
+* Page 1 (index 0): cover page – the student's name and a learning-target summary
+  are overlaid onto this page.  The summary is placed in the bottom half of the
+  page (the exam instructions are assumed to occupy only the top half).
 * Pages 2 … N+1 (indices 1 … N): one page per learning target, in the same order as
   the CSV columns.
 
@@ -39,7 +41,6 @@ import sys
 from pathlib import Path
 
 import pypdf
-from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
 
@@ -93,64 +94,75 @@ def _page_size(pdf_page) -> tuple[float, float]:
     return float(box.width), float(box.height)
 
 
-def _name_overlay_pdf(width: float, height: float, student_name: str) -> pypdf.PdfReader:
-    """Return a single-page PDF reader whose page contains only the student name."""
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=(width, height))
-    c.setFont("Helvetica-Bold", 18)
-    c.setFillColor(colors.black)
-    # Place name in the upper-left area of the cover
-    c.drawString(50, height - 60, student_name)
-    c.save()
-    buf.seek(0)
-    return pypdf.PdfReader(buf)
-
-
-def _summary_page_pdf(
+def _cover_overlay_pdf(
     width: float,
     height: float,
     student_name: str,
     learning_targets: list[str],
     scores: dict[str, int],
 ) -> pypdf.PdfReader:
-    """Return a single-page PDF reader that lists the student's LT statuses."""
+    """Return a single-page PDF overlay for the cover page.
+
+    Draws the student name near the top of the page and a learning-target
+    summary in the bottom half (the exam instructions are assumed to occupy
+    only the top half of the page).
+
+    Note: if there are many learning targets, the summary list may be truncated
+    to fit within the bottom half.  A warning is printed for any items that
+    cannot be displayed.
+    """
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=(width, height))
 
     margin = 50
-    y = height - margin
+    # Vertical gap between the midpoint separator line and the first text row.
+    SEPARATOR_OFFSET = 18
 
-    # Title
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(margin, y, f"Learning Target Status — {student_name}")
-    y -= 30
+    # --- Student name (upper area) ---
+    c.setFont("Helvetica-Bold", 18)
+    c.setFillColor(colors.black)
+    c.drawString(margin, height - 60, student_name)
 
-    # Categorise
+    # --- Separator line at the midpoint ---
+    c.setStrokeColor(colors.black)
+    c.setLineWidth(0.5)
+    c.line(margin, height / 2, width - margin, height / 2)
+
+    # --- Summary in the bottom half ---
     below_mastery = [lt for lt in learning_targets if scores.get(lt, 0) <= 2]
     at_mastery = [lt for lt in learning_targets if scores.get(lt, 0) == 3]
+
+    y = height / 2 - SEPARATOR_OFFSET  # start just below the midpoint separator
+
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(margin, y, "Learning Target Status:")
+    y -= 20
 
     def section(title: str, items: list[str]) -> None:
         nonlocal y
         if not items:
             return
-        c.setFont("Helvetica-Bold", 12)
+        c.setFont("Helvetica-Bold", 10)
         c.drawString(margin, y, title)
-        y -= 18
-        c.setFont("Helvetica", 11)
+        y -= 15
+        c.setFont("Helvetica", 10)
         for item in items:
-            if y < margin + 20:
-                c.showPage()
-                y = height - margin
-                c.setFont("Helvetica", 11)
-            c.drawString(margin + 15, y, f"\u2022  {item}")
-            y -= 16
-        y -= 10  # extra gap between sections
+            if y < margin + 10:
+                # Remaining items won't fit in the bottom half; warn and stop.
+                print(
+                    f"WARNING: summary for {student_name!r} truncated — "
+                    f"not enough space in the bottom half of the cover page."
+                )
+                break
+            c.drawString(margin + 12, y, f"\u2022  {item}")
+            y -= 13
+        y -= 5  # extra gap between sections
 
     section("Not yet at mastery (score \u2264 2):", below_mastery)
     section("At mastery, not yet at expertise (score = 3):", at_mastery)
 
     if not below_mastery and not at_mastery:
-        c.setFont("Helvetica", 11)
+        c.setFont("Helvetica", 10)
         c.drawString(margin, y, "All learning targets achieved at expertise level. Congratulations!")
 
     c.save()
@@ -172,23 +184,18 @@ def build_student_pdf(
     name: str = student["name"]
     scores: dict[str, int] = student["scores"]
 
-    # ---- Cover page (index 0) with student name stamped on it ---------------
+    # ---- Cover page (index 0) with name + summary stamped on it ------------
     if len(pdf_reader.pages) == 0:
         sys.exit("ERROR: the input PDF contains no pages.")
 
     cover = pdf_reader.pages[0]
     w, h = _page_size(cover)
 
-    overlay_reader = _name_overlay_pdf(w, h, name)
+    overlay_reader = _cover_overlay_pdf(w, h, name, learning_targets, scores)
     cover_copy = pypdf.PageObject.create_blank_page(width=w, height=h)
     cover_copy.merge_page(cover)
     cover_copy.merge_page(overlay_reader.pages[0])
     writer.add_page(cover_copy)
-
-    # ---- Summary page -------------------------------------------------------
-    summary_reader = _summary_page_pdf(w, h, name, learning_targets, scores)
-    for pg in summary_reader.pages:
-        writer.add_page(pg)
 
     # ---- Learning-target pages (score < 4 → include) -----------------------
     for i, lt in enumerate(learning_targets):

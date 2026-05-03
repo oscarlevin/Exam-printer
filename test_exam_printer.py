@@ -15,8 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from exam_printer import (
     read_csv,
     build_student_pdf,
-    _name_overlay_pdf,
-    _summary_page_pdf,
+    _cover_overlay_pdf,
     _page_size,
     main,
 )
@@ -106,17 +105,21 @@ class TestReadCsv:
 # ---------------------------------------------------------------------------
 
 class TestOverlayHelpers:
-    def test_name_overlay_is_one_page(self):
-        reader = _name_overlay_pdf(612, 792, "Test Student")
-        assert len(reader.pages) == 1
-
-    def test_summary_page_single_page(self):
-        reader = _summary_page_pdf(
+    def test_cover_overlay_is_one_page(self):
+        reader = _cover_overlay_pdf(
             612, 792, "Test Student",
             ["LT1", "LT2", "LT3"],
             {"LT1": 4, "LT2": 3, "LT3": 2},
         )
-        assert len(reader.pages) >= 1  # may overflow to 2 pages for long lists
+        assert len(reader.pages) == 1
+
+    def test_cover_overlay_all_expertise(self):
+        reader = _cover_overlay_pdf(
+            612, 792, "Test Student",
+            ["LT1", "LT2"],
+            {"LT1": 4, "LT2": 4},
+        )
+        assert len(reader.pages) == 1
 
     def test_page_size(self):
         pdf_bytes = _make_pdf(1, 612, 792)
@@ -138,41 +141,41 @@ class TestBuildStudentPdf:
         lts = [f"LT{i+1}" for i in range(num_lt_pages)]
         return reader, lts
 
-    def test_expertise_on_all_has_cover_and_summary_only(self, tmp_path):
+    def test_expertise_on_all_has_cover_only(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Alice", "scores": {"LT1": 4, "LT2": 4, "LT3": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover (1) + summary (1) + 0 LT pages = 2
-        assert len(writer.pages) == 2
+        # cover (1) + 0 LT pages = 1
+        assert len(writer.pages) == 1
 
     def test_below_mastery_includes_lt_page(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Bob", "scores": {"LT1": 2, "LT2": 4, "LT3": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + summary + LT1 page = 3
-        assert len(writer.pages) == 3
+        # cover + LT1 page = 2
+        assert len(writer.pages) == 2
 
     def test_at_mastery_includes_lt_page(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Carol", "scores": {"LT1": 3, "LT2": 4, "LT3": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + summary + LT1 page = 3
-        assert len(writer.pages) == 3
+        # cover + LT1 page = 2
+        assert len(writer.pages) == 2
 
     def test_all_below_mastery_includes_all_lt_pages(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Dave", "scores": {"LT1": 1, "LT2": 2, "LT3": 0}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + summary + 3 LT pages = 5
-        assert len(writer.pages) == 5
+        # cover + 3 LT pages = 4
+        assert len(writer.pages) == 4
 
     def test_mixed_scores(self, tmp_path):
         reader, lts = self._setup(tmp_path, 4)
         # LT1=4 (skip), LT2=3 (include), LT3=2 (include), LT4=4 (skip)
         student = {"name": "Eve", "scores": {"LT1": 4, "LT2": 3, "LT3": 2, "LT4": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + summary + 2 LT pages = 4
-        assert len(writer.pages) == 4
+        # cover + 2 LT pages = 3
+        assert len(writer.pages) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +200,10 @@ class TestMain:
 
         assert output_path.exists()
         reader = pypdf.PdfReader(str(output_path))
-        # Alice: cover(1) + summary(1) + 2 LT pages = 4
-        # Bob:   cover(1) + summary(1) + 2 LT pages = 4
-        # total = 8
-        assert len(reader.pages) == 8
+        # Alice: cover(1) + 2 LT pages = 3
+        # Bob:   cover(1) + 2 LT pages = 3
+        # total = 6
+        assert len(reader.pages) == 6
 
     def test_missing_pdf_exits(self, tmp_path):
         csv_path = _write_csv(tmp_path, [["Name", "LT1"], ["Alice", "4"]])
