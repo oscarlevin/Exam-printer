@@ -119,23 +119,32 @@ def _cover_overlay_pdf(
     SEPARATOR_OFFSET = 18
 
     # --- Student name (upper area) ---
-    c.setFont("Helvetica-Bold", 18)
+    c.setFont("Helvetica", 12)
     c.setFillColor(colors.black)
-    c.drawString(margin, height - 60, student_name)
+    c.drawRightString(width - margin, height - 60, student_name)
 
     # --- Separator line at the midpoint ---
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
-    c.line(margin, height / 2, width - margin, height / 2)
+    c.line(margin, 2* height / 3, width - margin, 2* height / 3)
 
     # --- Summary in the bottom half ---
     below_mastery = [lt for lt in learning_targets if scores.get(lt, 0) <= 2]
     at_mastery = [lt for lt in learning_targets if scores.get(lt, 0) == 3]
 
-    y = height / 2 - SEPARATOR_OFFSET  # start just below the midpoint separator
+    num_at_mastery = len(learning_targets) - len(below_mastery)
+    num_above_mastery = len(learning_targets) - num_at_mastery
+
+    y = 2*height / 3 - SEPARATOR_OFFSET  # start just below the midpoint separator
 
     c.setFont("Helvetica-Bold", 12)
     c.drawString(margin, y, "Learning Target Status:")
+    y -= 20
+
+    c.setFont("Helvetica", 12)
+    c.drawString(margin, y, f"You currently have {num_at_mastery} learning targets at Mastery or above.")
+    y -= 15
+    c.drawString(margin, y, f"You currently have {num_above_mastery} learning targets at Expertise.")
     y -= 20
 
     def section(title: str, items: list[str]) -> None:
@@ -158,8 +167,8 @@ def _cover_overlay_pdf(
             y -= 13
         y -= 5  # extra gap between sections
 
-    section("Not yet at mastery (score \u2264 2):", below_mastery)
-    section("At mastery, not yet at expertise (score = 3):", at_mastery)
+    section("These learning targets can be improved to Mastery level:", below_mastery)
+    section("These learning targets can be improved to Expertise level:", at_mastery)
 
     if not below_mastery and not at_mastery:
         c.setFont("Helvetica", 10)
@@ -197,18 +206,28 @@ def build_student_pdf(
     cover_copy.merge_page(overlay_reader.pages[0])
     writer.add_page(cover_copy)
 
+    # Always place LT content on a fresh sheet (blank backside of cover).
+    writer.add_page(pypdf.PageObject.create_blank_page(width=w, height=h))
+
     # ---- Learning-target pages (score < 4 → include) -----------------------
+    printed_lt_pages = 0
     for i, lt in enumerate(learning_targets):
         score = scores.get(lt, 0)
         if score < 4:
             page_idx = i + 1  # index 0 is the cover
             if page_idx < len(pdf_reader.pages):
                 writer.add_page(pdf_reader.pages[page_idx])
+                printed_lt_pages += 1
             else:
                 print(
                     f"WARNING: no page found for learning target {lt!r} "
                     f"(expected page index {page_idx}); skipping."
                 )
+
+    # If an odd number of LT pages were printed, add a trailing blank so the
+    # next student's exam starts on a fresh sheet.
+    if printed_lt_pages % 2 == 1:
+        writer.add_page(pypdf.PageObject.create_blank_page(width=w, height=h))
 
     return writer
 

@@ -145,37 +145,37 @@ class TestBuildStudentPdf:
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Alice", "scores": {"LT1": 4, "LT2": 4, "LT3": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover (1) + 0 LT pages = 1
-        assert len(writer.pages) == 1
+        # cover + forced blank after cover = 2
+        assert len(writer.pages) == 2
 
     def test_below_mastery_includes_lt_page(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Bob", "scores": {"LT1": 2, "LT2": 4, "LT3": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + LT1 page = 2
-        assert len(writer.pages) == 2
+        # cover + forced blank + LT1 + trailing blank (odd LT count) = 4
+        assert len(writer.pages) == 4
 
     def test_at_mastery_includes_lt_page(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Carol", "scores": {"LT1": 3, "LT2": 4, "LT3": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + LT1 page = 2
-        assert len(writer.pages) == 2
+        # cover + forced blank + LT1 + trailing blank (odd LT count) = 4
+        assert len(writer.pages) == 4
 
     def test_all_below_mastery_includes_all_lt_pages(self, tmp_path):
         reader, lts = self._setup(tmp_path, 3)
         student = {"name": "Dave", "scores": {"LT1": 1, "LT2": 2, "LT3": 0}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + 3 LT pages = 4
-        assert len(writer.pages) == 4
+        # cover + forced blank + 3 LT pages + trailing blank (odd LT count) = 6
+        assert len(writer.pages) == 6
 
     def test_mixed_scores(self, tmp_path):
         reader, lts = self._setup(tmp_path, 4)
         # LT1=4 (skip), LT2=3 (include), LT3=2 (include), LT4=4 (skip)
         student = {"name": "Eve", "scores": {"LT1": 4, "LT2": 3, "LT3": 2, "LT4": 4}}
         writer = build_student_pdf(reader, lts, student)
-        # cover + 2 LT pages = 3
-        assert len(writer.pages) == 3
+        # cover + forced blank + 2 LT pages = 4
+        assert len(writer.pages) == 4
 
 
 # ---------------------------------------------------------------------------
@@ -200,10 +200,10 @@ class TestMain:
 
         assert output_path.exists()
         reader = pypdf.PdfReader(str(output_path))
-        # Alice: cover(1) + 2 LT pages = 3
-        # Bob:   cover(1) + 2 LT pages = 3
-        # total = 6
-        assert len(reader.pages) == 6
+        # Alice: cover + forced blank + 2 LT pages = 4
+        # Bob:   cover + forced blank + 2 LT pages = 4
+        # total = 8
+        assert len(reader.pages) == 8
 
     def test_missing_pdf_exits(self, tmp_path):
         csv_path = _write_csv(tmp_path, [["Name", "LT1"], ["Alice", "4"]])
