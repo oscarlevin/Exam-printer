@@ -126,7 +126,7 @@ def _cover_overlay_pdf(
     # --- Separator line at the midpoint ---
     c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
-    c.line(margin, 2* height / 3, width - margin, 2* height / 3)
+    c.line(margin, height / 2, width - margin, height / 2)
 
     # --- Summary in the bottom half ---
     below_mastery = [lt for lt in learning_targets if scores.get(lt, 0) <= 2]
@@ -135,7 +135,7 @@ def _cover_overlay_pdf(
     num_at_mastery = len(learning_targets) - len(below_mastery)
     num_above_mastery = len(learning_targets) - num_at_mastery
 
-    y = 2*height / 3 - SEPARATOR_OFFSET  # start just below the midpoint separator
+    y = height / 2 - SEPARATOR_OFFSET  # start just below the midpoint separator
 
     c.setFont("Helvetica-Bold", 12)
     c.drawString(margin, y, "Learning Target Status:")
