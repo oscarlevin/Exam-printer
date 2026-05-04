@@ -131,9 +131,10 @@ def _cover_overlay_pdf(
     # --- Summary in the bottom half ---
     below_mastery = [lt for lt in learning_targets if scores.get(lt, 0) <= 2]
     at_mastery = [lt for lt in learning_targets if scores.get(lt, 0) == 3]
+    at_expertise = [lt for lt in learning_targets if scores.get(lt, 0) == 4]
 
-    num_at_mastery = len(learning_targets) - len(below_mastery)
-    num_above_mastery = len(learning_targets) - num_at_mastery
+    num_at_mastery = len(at_mastery) + len(at_expertise)
+    num_above_mastery = len(at_expertise)
 
     y = height / 2 - SEPARATOR_OFFSET  # start just below the midpoint separator
 
